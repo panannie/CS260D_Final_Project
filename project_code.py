@@ -373,9 +373,31 @@ class SimpleModel(torch.nn.Module):
         return self.fc(x)
 
 #hybrid loss function
-def hybrid_loss_fn(model, data, labels, pairs=None):
-    criterion = torch.nn.CrossEntropyLoss()
-    return criterion(model(data), labels)
+def hybrid_loss_fn(model, data, labels, pairs=None, contrastive_loss_fn=None):
+    classification_loss = torch.nn.CrossEntropyLoss()(model(data), labels)
+
+    if pairs:
+        features = model.get_features(data)
+        #contrastive loss for each pair (anchor, positive, negative)
+        contrastive_loss = 0
+        for anchor_idx, positive_idx, negative_idx in pairs:
+            contrastive_loss += contrastive_loss_fn(features[anchor_idx], features[positive_idx], features[negative_idx])
+        contrastive_loss /= len(pairs)
+        return classification_loss + contrastive_loss
+    else:
+        return classification_loss
+
+def create_pairs(data, labels):
+    pairs = []
+    for i, anchor_label in enumerate(labels):
+        positive_indices = (labels == anchor_label).nonzero(as_tuple=True)[0]
+        positive_index = positive_indices[random.choice(range(len(positive_indices)))]
+
+        negative_indices = (labels != anchor_label).nonzero(as_tuple=True)[0]
+        negative_index = negative_indices[random.choice(range(len(negative_indices)))]
+
+        pairs.append((i, positive_index.item(), negative_index.item()))
+    return pairs
 
 train_dataset = SpuriousMNIST(
     root='./data', train=True, download=True, transform=None
@@ -389,7 +411,7 @@ train_loader = DataLoader(train_subset, batch_size=64, shuffle=True)
 val_loader = DataLoader(val_subset, batch_size=64, shuffle=False)
 
 model = SimpleModel(input_dim=28*28, hidden_dim=128, output_dim=10)
-optimizer = optim.Adam(model.parameters(), lr=0.0001)
+optimizer = optim.Adam(model.parameters(), lr=0.0001) #learning rate
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
 
 #forgettability tracker
@@ -418,7 +440,8 @@ for epoch in range(num_epochs):
     for data, labels, indices in train_loader:
         optimizer.zero_grad()
         outputs = model(data)
-        loss = hybrid_loss_fn(model, data, labels)
+        pairs = create_pairs(data, labels)
+        loss = hybrid_loss_fn(model, data, labels, pairs=pairs, contrastive_loss_fn=contrastive_loss_fn)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
