@@ -35,13 +35,6 @@ train_dataset = SpuriousMNIST(
     root='./data', train=True, download=True,
     transform=None
 )
-train_size = int(0.8 * len(train_dataset))
-val_size = len(train_dataset) - train_size
-train_subset, val_subset = random_split(train_dataset, [train_size, val_size])
-
-#train dataLoader
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-val_loader = DataLoader(val_subset, batch_size=64, shuffle=False)
 
 import numpy as np
 
@@ -125,6 +118,7 @@ val_losses = []
 train_accuracies = []
 val_accuracies = []
 
+#testing
 def sample_pairs(data, labels, forget_counts):
     pairs = []
     for i in range(len(labels)):
@@ -139,7 +133,7 @@ from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 import torch
 
-#SpuriousMNIST
+#MNIST
 test_dataset = SpuriousMNIST(
     root='./data', train=False, download=True,
     transform=None
